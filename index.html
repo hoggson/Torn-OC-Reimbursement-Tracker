@@ -53,7 +53,6 @@
   </style>
 <script>
   var _paq = window._paq = window._paq || [];
-  /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
   _paq.push(["setDocumentTitle", document.domain + "/" + document.title]);
   _paq.push(['trackPageView']);
   _paq.push(['enableLinkTracking']);
@@ -109,7 +108,6 @@
       return `${hh}:${mm}:${ss} - ${dd}/${MM}/${yy}`;
     }
 
-    // Only Zip Ties uses "some" when qty=1; everything else uses "a"
     function itemPhrase(name, qty) {
       if (qty === 1) {
         if (name && name.toLowerCase() === "zip ties") {
@@ -142,17 +140,18 @@
       } else if (lastRun) {
         cutoff = new Date(lastRun);
       } else {
-        cutoff = null; // first run acts like ignoreCutoff
+        cutoff = null;
       }
 
       document.getElementById("status").textContent = "⏳ Fetching data…";
       document.getElementById("spinner").style.display = "block";
 
       try {
-        const [logData, factionData, itemData] = await Promise.all([
+        const [logData, factionData, itemData, knownFile] = await Promise.all([
           fetch(`https://api.torn.com/user/?selections=log&key=${apiKey}`).then(r => r.json()),
           fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`).then(r => r.json()),
-          fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`).then(r => r.json())
+          fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`).then(r => r.json()),
+          fetch("https://modgaming.co.uk/ocrt/known_oc_items.txt").then(r => r.text()).catch(() => "")
         ]);
 
         if (logData.error || factionData.error || itemData.error) {
@@ -162,6 +161,10 @@
           document.getElementById("spinner").style.display = "none";
           return;
         }
+
+        // Merge hosted known items
+        const hostedItems = knownFile.split(/\r?\n/).map(x => x.trim()).filter(x => x.length > 0);
+        knownItems = Array.from(new Set([...knownItems, ...hostedItems]));
 
         const factionMemberIds = Object.keys(factionData.members || {}).map(id => String(id));
         const sentForOC = {};
@@ -177,7 +180,6 @@
           const timeFmt = formatTornTime(isoTime);
           const title = entry.title;
 
-          // Item send lines
           if (title === "Item send") {
             const receiverId = String(entry.data.receiver ?? entry.data.receiver_id ?? entry.data.user ?? "");
             for (const item of entry.data.items || []) {
@@ -191,23 +193,30 @@
                   `<span class="log-send">${timeFmt} You sent ${phrase} to ${receiverName} with the message: ${entry.data.message}</span>`
                 );
                 sentForOC[name] = true;
-              }
-              if (String(entry.data.message).trim() === "For OC." && !knownItems.includes(name)) {
-                knownItems.push(name);
+
+                // If item is in hosted known list, always include it regardless of message
+                if (knownItems.includes(name)) {
+                  sentForOC[name] = true;
+                }
+
+                // Keep existing "For OC." logic too
+                if (String(entry.data.message).trim() === "For OC." && !knownItems.includes(name)) {
+                  knownItems.push(name);
+                }
               }
             }
           }
 
-          // Item market buy lines
           if (title === "Item market buy") {
             for (const item of entry.data.items || []) {
               const name = itemData.items[item.id]?.name;
               if (!name) continue;
               const qty = item.qty || 1;
 
-              // Match script logic: include all on first run/ignoreCutoff, otherwise only OC items that were sent
               const include =
-                ignoreCutoff || !cutoff || (knownItems.includes(name) && sentForOC[name]);
+                ignoreCutoff ||
+                !cutoff ||
+                (knownItems.includes(name) && (sentForOC[name] || true));
 
               if (include) {
                 totalCost += entry.data.cost_total;
@@ -222,7 +231,6 @@
             }
           }
 
-          // Faction payday receive lines
           if (title === "Faction payday receive") {
             const amt = entry.data.money_given;
             totalReimbursed += amt;
@@ -232,7 +240,6 @@
           }
         }
 
-        // Prepare summary
         const summaryLines = [];
         summaryLines.push(`Total OC item purchases: $${totalCost}`);
         summaryLines.push(`Reimbursements received: $${totalReimbursed}`);
@@ -246,10 +253,8 @@
           );
         }
 
-        // Reverse chronological display, then append summary
         const finalOutput = logLines.reverse().concat(summaryLines);
 
-        // Save state
         localStorage.setItem("knownItems", JSON.stringify(knownItems));
         const runTime = new Date().toISOString();
         localStorage.setItem("lastRun", runTime);
@@ -257,7 +262,6 @@
         document.getElementById("status").textContent = "✅ Done.";
         document.getElementById("spinner").style.display = "none";
 
-        // Output as plain text (strip HTML <span> tags for the textarea)
         document.getElementById("output").value = finalOutput
           .join("\n")
           .replace(/<[^>]+>/g, "");
