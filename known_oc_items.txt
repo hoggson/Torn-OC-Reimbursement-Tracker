@@ -10,3 +10,4 @@ Dental Mirror
 Blood Bag : Irradiated
 DSLR Camera
 RF Detector
+Billfold
