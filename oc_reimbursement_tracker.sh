@@ -109,7 +109,7 @@ while read -r entry; do
           echo "$time_fmt You bought ${qty}x $name on the item market from $seller_name at \$$(printf "%'d" $cost_each) each for a total of \$$(printf "%'d" $cost_total)" >> "$TMP_LOG"
         else
           article="a"
-          [[ "$name" == "Zip Ties" ]] && article="some"
+          [[ "$name" == "Zip Ties" || "$name" == "Chloroform" ]] && article="some"
           echo "$time_fmt You bought $article $name on the item market from $seller_name at \$$(printf "%'d" $cost_each) each for a total of \$$(printf "%'d" $cost_total)" >> "$TMP_LOG"
         fi
       fi
@@ -127,7 +127,7 @@ while read -r entry; do
       if [[ " ${FACTION_MEMBERS[*]} " == *" $receiver "* ]]; then
         receiver_name=$(get_player_name "$receiver")
         article="a"
-        [[ "$name" == "Zip Ties" ]] && article="some"
+        [[ "$name" == "Zip Ties" || "$name" == "Chloroform" ]] && article="some"
         echo "$time_fmt You sent $article $name to $receiver_name with the message: For OC." >> "$TMP_LOG"
       fi
     done < <(echo "$entry" | jq -c '.data.items[]')

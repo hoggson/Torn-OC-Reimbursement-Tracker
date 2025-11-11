@@ -110,7 +110,7 @@
 
     function itemPhrase(name, qty) {
       if (qty === 1) {
-        if (name && name.toLowerCase() === "zip ties") {
+        if (name && (name.toLowerCase() === "zip ties" || name.toLowerCase() === "chloroform")) {
           return `some ${name}`;
         }
         return `a ${name}`;
